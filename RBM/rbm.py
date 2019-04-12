@@ -28,27 +28,30 @@ dataset = Dataset(filename, datapath)
 ##### Hyperparameters & parameters #####
 num_hidden = 100
 num_visible = dataset.num_books
+num_condition = dataset.num_books
 num_rate = 5
 alpha = 0.5
-epoch = 1
+epoch = 10
 
 ## placeholders for parameters
 
 # input_vects (batch)
 input_vects = tf.placeholder(tf.float32, [None, num_rate, num_visible])
 # input_conds (batch)
-input_conds = tf.placeholder(tf.float32, [None, num_visible])
+input_conds = tf.placeholder(tf.float32, [None, num_condition])
 # Weight placeholders
 ## W -- on visible to hidden, W_c -- on conditional to hidden
-W = tf.placeholder(tf.float32, [num_rate, num_hidden, num_visible])
-W_c = tf.placeholder(tf.float32, [num_hidden, num_visible])
+W = tf.placeholder(tf.float32, [num_rate, num_visible, num_hidden])
+W_c = tf.placeholder(tf.float32, [num_hidden, num_condition])
 # bias placeholders
 ## b_v -- bias on visible nodes, b_h -- bias on hidden nodes
 b_v = tf.placeholder(tf.float32, [num_rate, num_visible])
 b_h = tf.placeholder(tf.float32, [num_hidden])
 
 # create tensorflow session
-sess = tf.Session()
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+sess = tf.Session(config=config)
 sess.run(tf.global_variables_initializer())
 ########################################
 
@@ -73,7 +76,7 @@ Samples h given v
 
 parameters :
     v = input for the visible layer
-    W = weight from visible to hidden
+    W = weight b/w visible and hidden
     b_h = hidden bias
     cond = specify whether conditional vector is given
     c = conditional vector
@@ -91,16 +94,15 @@ def v_to_h(v, W, b_h, cond=False, c=0, W_c=0) :
     ### if the conditional vector is not given, the bias would simply be all 0
     else :
         h_c = tf.zeros([num_hidden, 1])
-
-    h_list = []
-    for i in range(0, num_rate) :
-        temp = tf.matmul(tf.gather_nd(W, [i]), tf.transpose(v[:,i,:]))
-        h_list.append(temp)
-    h_ = tf.add_n(h_list)
-    h_ = tf.add(h_, tf.expand_dims(b_h, 1))
-    h_ = tf.add(h_, h_c)
-    h_ = tf.nn.sigmoid(h_)
-    h = tf.nn.relu(tf.sign(h_ - tf.random_uniform(tf.shape(h_))))
+    
+    W = tf.reshape(W, [num_rate*num_visible, num_hidden])
+    v = tf.reshape(v, [-1, num_rate*num_visible])
+    h_ = tf.transpose(tf.matmul(v, W))  # weight dot visible vector [h, None]
+    
+    h_ = tf.add(h_, tf.expand_dims(b_h, 1)) # add hidden bias
+    h_ = tf.add(h_, h_c)    # add conditional bias
+    h_ = tf.nn.sigmoid(h_)  # sigmoid (0-1 probability value h_)
+    h = tf.nn.relu(tf.sign(h_ - tf.random_uniform(tf.shape(h_))))   #bernoulli sampling
     ### h = sampled h given v, h_ = p(h|v)   shape: [h, None]
     return h, h_
 
@@ -117,12 +119,12 @@ returns :
     v = visible vector given h   shape: [None, r, v]
 '''
 def h_to_v(h, W, b_v, mask=0, use_mask=False) :
-    v_list = []
-    for i in range(0, num_rate) :
-        temp = tf.add(tf.matmul(tf.transpose(h), tf.gather_nd(W, [i])), tf.gather_nd(b_v, [[i]]))
-        v_list.append(temp)
-    v = tf.stack(v_list, axis = 1)
-    v = tf.nn.softmax(v, axis = 1)
+    
+    W = tf.reshape(W, [num_rate*num_visible, num_hidden])
+    v_ = tf.transpose(tf.matmul(W, h))  # [None, rv]
+    v_ = tf.reshape(v_, [-1, num_rate, num_visible])    # [None, r, v]
+
+    v = tf.nn.softmax(v_, axis = 1) # softmax on ratings axis
     if use_mask is True :
         v = tf.multiply(v, mask)
     ### v = p(v|h)   shape: [None, r, v]
@@ -162,39 +164,28 @@ def gibbs_sampling(input_vect, W, b_h, b_v, k=1, cond=False, c=0, W_c=0) :
 Trains on the vector(s) given
 
 parameters :
-    input_vect = input for the visible layer   shape: [None, r, v] or [r, v]
+    input_vect = input for the visible layer   shape: [None, r, v]
     W = weight matrix b/w visible and hidden
     b_h = hidden layer bias
     b_v = visible layer bias
-    batch = whether data is given in batch
     cond = whether conditional data is given
     c = conditional vector
     W_c = weight matrix b/w conditional and hidden
 returns :
-    gradients list
+    --gradients list--
     w_grad = gradient for weight matrix W
     b_v_grad = gradient for visible bias b_v
     b_h_grad = gradient for hidden bias b_h
-    c_grad = gradient for conditional weight matrix W_c
+    (c_grad = gradient for conditional weight matrix W_c)
 '''
 def train_on_vect(input_vect, W, b_h, b_v, cond=False, c=0, W_c=0) :
     v0, h0, h0_, vk, hk, hk_ = gibbs_sampling(input_vect, W, b_h, b_v, 1, cond, c, W_c)
     
-    pos_grad_list = []
-    ### pos_grad = v0xh0
-    for i in range(0, num_rate) :
-        temp = tf.multiply(tf.expand_dims(v0[:,i,:], 1), tf.expand_dims(tf.transpose(h0), 2))
-        temp = tf.reduce_mean(temp, axis=0)
-        pos_grad_list.append(temp)
-    pos_grad = tf.stack(pos_grad_list) ## [h, v]
-        
-    neg_grad_list = []
-    ### neg_grad = vkxhk
-    for i in range(0, num_rate) :
-        temp = tf.multiply(tf.expand_dims(vk[:,i,:], 1), tf.expand_dims(tf.transpose(hk), 2))
-        temp = tf.reduce_mean(temp, axis=0)
-        neg_grad_list.append(temp)
-    neg_grad = tf.stack(neg_grad_list) ## [h, v]
+    pos_grad = tf.multiply(tf.reshape(v0, [-1, num_rate, num_visible, 1]), tf.reshape(h0, [-1, 1, 1, num_hidden])) 
+    pos_grad = tf.reduce_mean(pos_grad, axis=0) # [r, v, h]
+    
+    neg_grad = tf.multiply(tf.reshape(vk, [-1, num_rate, num_visible, 1]), tf.reshape(hk, [-1, 1, 1, num_hidden]))
+    neg_grad = tf.reduce_mean(neg_grad, axis=0) # [r, v, h]
         
     h0_ = tf.reduce_mean(h0_, axis=1)
     hk_ = tf.reduce_mean(hk_, axis=1)
@@ -208,11 +199,25 @@ def train_on_vect(input_vect, W, b_h, b_v, cond=False, c=0, W_c=0) :
     ### if conditional data is given, compute gradient for W_c as well
     if cond :
         c_grad = tf.multiply(tf.expand_dims((h0-hk), 1), tf.expand_dims(tf.transpose(c), 0))
-        c_grad = tf.reduce_mean(c_grad, axis=2)  ## [h, v]
+        c_grad = tf.reduce_mean(c_grad, axis=2)  ## [h, c]
         return [w_grad, b_v_grad, b_h_grad, c_grad]
     else :
         return [w_grad, b_v_grad, b_h_grad]
-    
+
+'''
+Predict on input_vect
+
+parameters :
+    input_vect = vectors to make predictions on
+    W = updated weight matrix
+    b_h = updated hidden bias
+    b_v = updated visible bias
+    cond = whether conditional vector is given
+    c = conditional vect
+    W_c = updated conditional weight matrix
+returns :
+    prediction = prediction on the given vectors   shape: [None, v]
+'''    
 def predict(input_vect, W, b_h, b_v, cond=False, c=0, W_c=0) :
     h, h_ = v_to_h(input_vect, W, b_h, cond, c, W_c)   # [h, None]
     v = h_to_v(h_, W, b_v)   # [None, r, v]
@@ -225,7 +230,7 @@ def predict(input_vect, W, b_h, b_v, cond=False, c=0, W_c=0) :
 TRAIN RBM
 '''
 ### initialize parameters
-cur_w = np.zeros([num_rate, num_hidden, num_visible], np.float32)
+cur_w = np.zeros([num_rate, num_visible, num_hidden], np.float32)
 cur_b_v = np.zeros([num_rate, num_visible], np.float32)
 cur_b_h = np.zeros([num_hidden], np.float32)
 cur_w_c = np.zeros([num_hidden, num_visible], np.float32)
@@ -238,11 +243,11 @@ print("starting training")
 for i in range(0, epoch) :
     print("epoch: ", i)
     # per batch of size 100 in input vectors
-    for j in range(0, len(dataset.input_vects_c), 100) :
-        vects = dataset.input_vects_c[j:j+100]
+    for j in range(0, len(dataset.input_vects_c), 10) :
+        vects = dataset.input_vects_c[j:j+10]
         in_vects = [i[0] for i in vects]
         cond_vects = [i[1][0] for i in vects]
-        print(j, ' to ', j+100)
+        print(j, ' to ', j+10)
         # obtain gradients for each vector and update
         gradients = sess.run(grads, feed_dict={
                 input_vects: in_vects, W: cur_w, b_h: cur_b_h, b_v: cur_b_v, input_conds: cond_vects, W_c: cur_w_c})
