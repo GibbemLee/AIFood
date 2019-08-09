@@ -1,0 +1,13 @@
+﻿<!DOCTYPE html>
+<html>
+<body>
+    <div>
+        <a href="/main/">
+            {% load static %}
+            <img src="{% static "main/logo.png" %}" alt="Mind Reading" height="40" id="logo"  width="90">
+        </a>
+    </div>
+    <h2>회원가입이 완료되었습니다. </h2><br>
+    <a href="{% url 'main:login' %}">Log in</a>
+</body>
+</html>

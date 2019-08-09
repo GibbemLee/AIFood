@@ -1,0 +1,27 @@
+﻿<!DOCTYPE html>
+<html>
+<body>
+    <div>
+        <h3>회원 탈퇴</h3>
+    </div>
+    <table>
+    <form method="POST" action="{% url 'main:deleteUser' %}">
+    {% csrf_token %}
+        <tr>
+            <th>아이디</th>
+            <td>{{user.username}}</td>
+            <input type="hidden" name="user" value="{{user.username}}">
+        </tr>
+        <tr>
+            <th>비밀번호</th>
+            <td><input type="password" name="pw"></td>
+        </tr>
+    </table>
+    {%if error %}
+    <p>{{ error }}</p>
+    {% endif %}
+    <input type="submit" value="확인">
+    <button>취소</button>
+    </form>
+</body>
+</html>

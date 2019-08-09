@@ -1,0 +1,46 @@
+﻿{% load static %}
+<!DOCTYPE html>
+<html>
+<body>
+    <div>
+        <a href="/main/">
+            <img src="{% static "main/logo.png" %}" alt="Mind Reading" height="40" id="logo"  width="90">
+        </a>
+    </div>
+    {% if book_list %}
+    <div>
+    <form action="." method="POST">
+        <input type="submit" value="rate_submit" />
+        <table>
+            <tr>
+            {% for book in book_list %}
+            <td>
+                <img src={{book.image_src}} width="150" height="220" border="0">
+                <br>
+                <p>{{book.title}}</p>
+                <input type="hidden" name="user" value="{{user.username}}" />
+                <input type="hidden" name="book{{ forloop.counter }}" value="{{book.title}}" />
+                <input type="hidden" name="rate{{ forloop.counter }}" value="0" />
+                <div class="{{book.title}}">
+                    <img src="{% static "main/star_empty.png" %}" id="star1{{ forloop.counter }}" onclick="rating1({{ forloop.counter }})" width="20" height="20">
+                    <img src="{% static "main/star_empty.png" %}" id="star2{{ forloop.counter }}" onclick="rating2({{ forloop.counter }})" width="20" height="20">
+                    <img src="{% static "main/star_empty.png" %}" id="star3{{ forloop.counter }}" onclick="rating3({{ forloop.counter }})" width="20" height="20">
+                    <img src="{% static "main/star_empty.png" %}" id="star4{{ forloop.counter }}" onclick="rating4({{ forloop.counter }})" width="20" height="20">
+                    <img src="{% static "main/star_empty.png" %}" id="star5{{ forloop.counter }}" onclick="rating5({{ forloop.counter }})" width="20" height="20">
+                </div>
+            </td>
+                {% if forloop.counter|divisibleby:5 %}
+                </tr>
+                <tr>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </table>
+        </form>
+    </div>
+    {% endif %}
+        
+</body>
+</html>
+<script src="/static/js/rating.js"  type="text/javascript"></script>
+            

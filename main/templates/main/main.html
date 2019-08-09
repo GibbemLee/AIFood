@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+    <head>
+    </head>
+ 
+    <body>
+        <div>
+            <span>
+                <center>
+                    <div>
+                        <a href="/main/">
+                        {% load static %}
+                        <img src="{% static "main/logo.png" %}" alt="Mind Reading" height="182" id="logo"  width="544"></a>
+                    </div>
+                </center>
+            </span>
+            <div>
+                <center>
+                    {% if user.is_authenticated %}
+                    {% csrf_token %}
+                    <p> {{ user.username }}님 안녕하세요!</p>
+                    <table>
+                        <tr>
+                            <td><a href="/main/mypage/"> my page </a></td>
+                            <td><a href="/info/"> my book </a></div></td>
+                        </tr>
+                    </table>
+                    <form action="{% url 'main:logout' %}">
+                        <button>Logout</button>
+                    </form>
+                    {% else %}
+                    <a href="/main/login/">
+                    <span class="login"style="padding: 3px 5px 3px 5px;">Log in</span></a>
+                    <a href="/main/signup/">
+                    <span class="signup"style="padding: 3px 5px 3px 5px;">Sign up</span></a>
+                
+                    {% endif %}</center>
+            </div>
+        </div>
+         
+    <body>
+</html>

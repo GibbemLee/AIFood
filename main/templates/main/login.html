@@ -1,0 +1,22 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<body>
+    <div>
+        <a href="/main/">
+            <img src="{% static "main/logo.png" %}" alt="Mind Reading" height="40" id="logo"  width="90">
+        </a>
+    </div>
+    <form action="." method="post">
+    {% csrf_token %}
+    {{ form }}
+    <br>
+    <input type="submit" value="sign in" />
+    <button onclick="location.href='/main/'">뒤로가기</button>
+    </form>
+    <br>
+    {% if error_message %}<p><strong>{{ error_message }}</string></p>{% endif %}
+
+
+</body>
+</html>
